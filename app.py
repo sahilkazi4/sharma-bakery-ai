@@ -42,6 +42,18 @@ Rules for AI:
 # Hum model select kar rahe hain aur usko apni business training de rahe hain
 model = genai.GenerativeModel('gemini-flash-lite-latest', system_instruction=business_rules)
 
+# ========================================================
+# MAGIC TRICK: HIDE EXTRA LOGOS AND FORK BUTTONS
+# ========================================================
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
+
 
 # ========================================================
 # 3. APPLICATION KA USER INTERFACE (Streamlit ke sath)
