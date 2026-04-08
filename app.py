@@ -2,16 +2,35 @@ import streamlit as st
 import google.generativeai as genai
 
 # ========================================================
+# MAGIC TRICK (NUCLEAR OPTION): HIDE ALL LOGOS & BADGES
+# Note: set_page_config hamesha imports ke baad sabse pehli line honi chahiye
+# ========================================================
+st.set_page_config(page_title="Sharma Bakery AI", page_icon="🍞")
+
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            /* Deploy aur Toolbar buttons hide karne ke liye */
+            [data-testid="stToolbar"] {visibility: hidden !important;}
+            /* Hosted with Streamlit badge (niche right corner) hide karne ke liye */
+            iframe[title="streamlitAppViewerBadge"] {display: none !important;}
+            iframe[src*="badge"] {display: none !important;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
+
+
+# ========================================================
 # 1. AI INTEGRATION PART (API ko app se jodna)
 # ========================================================
-# Niche "YOUR_API_KEY_HERE" ko hata kar apni wo API Key dalein 
-# jo aapne Notepad me save karke rakhi thi (Quotes "" ke andar hi rakhna)
 API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=API_KEY)
 
 
 # ========================================================
-# 2. AI TRAINING PART (Upgraded Context & Rules)
+# 2. AI TRAINING PART (Upgraded Context & WhatsApp Rules)
 # ========================================================
 business_rules = """
 Aap 'Sharma Bakery' ke official AI customer support agent aur order manager ho.
@@ -22,6 +41,7 @@ Business Details:
 - Timings: Subah 9:00 AM se Raat 10:00 PM (Mon-Sun)
 - Location: Sanquelim, Goa
 - Home Delivery: Available.
+- Owner WhatsApp Number: 919765070870 (Ye bakery owner ka number hai)
 
 Menu & Prices:
 1. Black Forest Cake: ₹500
@@ -32,34 +52,23 @@ Menu & Prices:
 
 Order Processing Rules (Strictly Follow Karein):
 1. Acknowledge with Price: Jab bhi customer koi item order karne ko bole, toh acknowledge karein aur uske samne uska Price likhein. (e.g., "Ji zaroor, 2 Veg Patties (₹25 x 2 = ₹50)").
-2. Mandatory Details: Order process aage badhane se pehle customer se unka Delivery Address aur 10-digit Phone Number puchein. Agar dono me se ek bhi na mile, toh pehle wo dono maangein. Bina dono details ke order aage nahi badhana hai.
-3. Order Summary & Total Amount: Jab item, address aur phone number sab mil jaye, toh final confirmation se pehle ek 'Order Summary' (Bill) present karein. Har item ka price aur Total Bill Amount (Sum calculation) dikhayein. Fir customer se puchein: "Kya main ye order final kar doon?"
-4. OTP Verification: Jab customer order ko confirm (Yes/Haan) kar de, toh uske baad automatically apne man se ek random 4-digit OTP generate karein (jaise 8492) aur reply karein: "Aapka order successfully place ho gaya hai! Delivery boy ko aate waqt kripya ye OTP:[Aapka-4-Digit-OTP] zaroor batayein."
+2. Mandatory Details: Order process aage badhane se pehle customer se unki 3 cheezein mangeni hai: Unka NAAM (Name), Delivery ADDRESS, aur 10-digit PHONE NUMBER. Bina in teeno details ke order aage nahi badhana hai.
+3. Order Summary & Total Amount: Jab item, naam, address aur phone number sab mil jaye, toh final confirmation se pehle ek 'Order Summary' (Bill) present karein. Har item ka price aur Total Bill Amount (Sum calculation) dikhayein. Fir customer se puchein: "Kya main ye order final kar doon?"
+4. OTP Verification & WhatsApp Link: 
+   Jab customer order ko confirm (Yes/Haan) kar de, toh ye karein:
+   - Apne man se ek random 4-digit OTP generate karein (jaise 8492) aur unhe batayein.
+   - Reply ke theek niche ye WhatsApp link ZAROOR generate karein, taki customer uspar click karke owner ko detail bhej sake.
+   - Link generation format (Space ki jagah %20 aur Next line ki jagah %0A use karein):
+   [👉 Click Here to Send Order to Bakery](https://wa.me/919876543210?text=NEW%20ORDER%20RECEIVED!%0A%0A*Customer%20Name:*%20[Customer_Ka_Naam]%0A*Phone:*%20[Customer_Ka_Number]%0A*Address:*%20[Customer_Ka_Address]%0A%0A*Order%20Details:*%0A[Item_1]%20-%20Rs.[Price]%0A[Item_2]%20-%20Rs.[Price]%0A%0A*Total%20Amount:*%20Rs.[Total_Amount]%0A*Delivery%20OTP:*%20[Aapne_Jo_OTP_Diya])
 
 General Rules:
 - Agar item menu me nahi hai toh nicely bol dein ki hum sirf menu items hi banate hain.
 - Out of context (politics, dushri company) sawalon ka polite inkar karein.
-- Hamesha user jis language me baat kare (Hinglish - Hindi written in English alphabets) me bahut polite baat karein.
+- Hamesha user jis language me baat kare (Hinglish me) usme bahut polite baat karein.
 """
 
-# Baki ka aapka Streamlit code (Magic Tricks, etc.) waisa ka waisa hi rahega
+# Baki ka aapka Streamlit code
 model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=business_rules)
-
-# ========================================================
-# ADVANCED MAGIC TRICK: HIDE EVERY STREAMLIT LOGO/BUTTON
-# ========================================================
-hide_st_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header {visibility: hidden;}
-            /* Deploy button ko hide karne ke liye */
-            .stDeployButton {display: none !important;}
-            /* Hosted with Streamlit logo ko hide karne ke liye */
-            [data-testid="viewerBadge"] {display: none !important;}
-            </style>
-            """
-st.markdown(hide_st_style, unsafe_allow_html=True)
 
 
 # ========================================================
