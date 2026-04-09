@@ -15,12 +15,18 @@ st.set_page_config(
 
 hide_st_style = """
             <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            /* Dhyan de: Yaha se 'header' wali line hata di hai taaki menu button dikhe */
+            /* Sirf right side ke faltu buttons (Deploy, 3-dots) hide honge */
             [data-testid="stToolbar"] {visibility: hidden !important;}
+            
+            /* Niche ka Streamlit footer hide hoga */
+            footer {visibility: hidden !important;}
+            
+            /* Hosted badge hide hoga */
             iframe[title="streamlitAppViewerBadge"] {display: none !important;}
             iframe[src*="badge"] {display: none !important;}
+
+            /* 🎯 MAGIC LINE: Menu open karne wala (>) button HAMESHA dikhega! */
+            [data-testid="collapsedControl"] {display: flex !important; visibility: visible !important;}
             </style>
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
