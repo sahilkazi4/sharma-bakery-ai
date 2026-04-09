@@ -1,5 +1,4 @@
 import streamlit as st
-import os
 import pandas as pd
 from groq import Groq
 from geopy.geocoders import Nominatim
@@ -42,25 +41,24 @@ def get_distance(customer_address):
 
 
 # ========================================================
-# NAYA FUNCTION: GOOGLE SHEET SE MENU LAANA
+# FUNCTION: GOOGLE SHEET SE LIVE MENU LAANA (1 Min Timer)
 # ========================================================
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=30)  # Har 30 sec me sheet ko check karega
 def get_live_menu():
     try:
-        # Yaha apna Publish to web wala CSV link paste karein
+        # Aapka exact Google Sheet CSV link
         sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRaHxTZYbFjTGCSCE5kNLyTuUc4vUkY3V43tHSFxG2y3cbwyn9r3vRLWL42Bw6MricPgK7eoXae7rux/pub?gid=0&single=true&output=csv"
         df = pd.read_csv(sheet_url)
         
         menu_text = ""
-        # Sheet ke har row ko padh kar AI ke samajhne layak text banayenge
         for index, row in df.iterrows():
+            # Check kar rahe hain ki Item Name aur Price columns sheet me hain ya nahi
             menu_text += f"{index + 1}. {row['Item Name']}: ₹{row['Price']}\n"
         return menu_text
     except Exception as e:
-        # Agar net band ho ya sheet fail ho jaye, toh ye backup menu chalega
-        return "1. Black Forest Cake: ₹500\n2. Pineapple Cake: ₹400\n3. Veg Patties: ₹25\n4. Paneer Patties: ₹40\n5. Cold Coffee: ₹80"
+        # Agar error aaye toh app crash na ho
+        return f"[Error in Sheet: Check column names 'Item Name' and 'Price'.]\nBackup Menu:\n1. Black Forest Cake: ₹500"
 
-# Live menu ko variable me store karna
 LIVE_MENU = get_live_menu()
 
 
@@ -74,7 +72,6 @@ client = Groq(api_key=API_KEY)
 # ========================================================
 # 2. AI TRAINING PART (System Prompt with LIVE MENU)
 # ========================================================
-# Yaha dhyan dijiye: Maine hardcoded menu hata kar {LIVE_MENU} laga diya hai
 business_rules = f"""
 Aap 'Sharma Bakery' ke official AI customer support agent aur order manager ho.
 Aapka kaam customers ki help karna aur professionally unka order book karna hai.
@@ -85,7 +82,7 @@ Business Details:
 - Location: Sanquelim, Goa
 - Owner WhatsApp Number: 919765070870 
 
-Menu & Prices (Aapko sirf yahi items bechne hain):
+Menu & Prices (Sirf yahi items bechne hain):
 {LIVE_MENU}
 
 DELIVERY CHARGES RULES (Strictly Follow):
@@ -108,16 +105,28 @@ General Rules:
 # ========================================================
 # 3. APPLICATION UI & CHAT LOGIC
 # ========================================================
+# Sidebar me Live Menu dikhana (Customer & Owner dono ke liye helpful)
+with st.sidebar:
+    st.markdown("### 📋 Today's Live Menu")
+    st.text(LIVE_MENU)
+    if st.button("🔄 Refresh Menu / Clear Chat"):
+        st.cache_data.clear()
+        st.session_state.messages = [{"role": "system", "content": business_rules}]
+        st.rerun()
+
 st.title("🍞 Sharma Bakery AI Assistant")
 st.write("Swagat hai! Humari bakery ya menu ke baare me kuch bhi puchiye.")
 
-# Session state me messages list setup karna
+# Session state handle karna (Yahi sabse zaroori fix tha)
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {"role": "system", "content": business_rules}
     ]
+else:
+    # Agar chat chal rahi hai aur piche se menu update ho, toh AI ko naya menu mil jayega
+    st.session_state.messages[0]["content"] = business_rules
 
-# Purane messages screen par dikhana (System prompt ko chhod kar)
+# Purane messages screen par dikhana
 for msg in st.session_state.messages:
     if msg["role"] != "system":
         with st.chat_message(msg["role"]):
@@ -126,25 +135,20 @@ for msg in st.session_state.messages:
 user_input = st.chat_input("Apna sawaal yaha type karein...")
 
 if user_input:
-    # 1. User message ko UI me dikhana
     with st.chat_message("user"):
         st.markdown(user_input)
     
-    # 2. User message ko history me save karna
     st.session_state.messages.append({"role": "user", "content": user_input})
     
-    # 3. Distance calculate karna aur hidden context banana
     dist = get_distance(user_input)
     hidden_context = ""
     if dist is not None:
          hidden_context = f"\n\n[SYSTEM NOTE: Customer ka bakery se distance {dist} km calculate hua hai. Bill me isi distance ke hisaab se delivery charge lagao.]"
     
-    # 4. API call ke liye temporary messages list banana
     api_messages = st.session_state.messages.copy()
     if hidden_context:
         api_messages[-1] = {"role": "user", "content": user_input + hidden_context}
 
-    # 5. Groq AI se response lena
     try:
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -155,11 +159,9 @@ if user_input:
         
         response_text = completion.choices[0].message.content
         
-        # 6. Response screen pe dikhana
         with st.chat_message("assistant"):
             st.markdown(response_text)
             
-        # 7. Response history me save karna
         st.session_state.messages.append({"role": "assistant", "content": response_text})
         
     except Exception as e:
