@@ -10,14 +10,14 @@ from geopy.distance import geodesic
 st.set_page_config(
     page_title="Sharma Bakery AI", 
     page_icon="🍞", 
-    initial_sidebar_state="expanded"  # Yeh line menu ko hamesha khula rakhegi
+    initial_sidebar_state="expanded" 
 )
 
 hide_st_style = """
             <style>
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
-            header {visibility: hidden;}
+            /* Dhyan de: Yaha se 'header' wali line hata di hai taaki menu button dikhe */
             [data-testid="stToolbar"] {visibility: hidden !important;}
             iframe[title="streamlitAppViewerBadge"] {display: none !important;}
             iframe[src*="badge"] {display: none !important;}
