@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import pandas as pd
 from groq import Groq
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
@@ -39,16 +40,42 @@ def get_distance(customer_address):
     except:
         return None
 
+
+# ========================================================
+# NAYA FUNCTION: GOOGLE SHEET SE MENU LAANA
+# ========================================================
+@st.cache_data(ttl=600)
+def get_live_menu():
+    try:
+        # Yaha apna Publish to web wala CSV link paste karein
+        sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRaHxTZYbFjTGCSCE5kNLyTuUc4vUkY3V43tHSFxG2y3cbwyn9r3vRLWL42Bw6MricPgK7eoXae7rux/pub?gid=0&single=true&output=csv"
+        df = pd.read_csv(sheet_url)
+        
+        menu_text = ""
+        # Sheet ke har row ko padh kar AI ke samajhne layak text banayenge
+        for index, row in df.iterrows():
+            menu_text += f"{index + 1}. {row['Item Name']}: ₹{row['Price']}\n"
+        return menu_text
+    except Exception as e:
+        # Agar net band ho ya sheet fail ho jaye, toh ye backup menu chalega
+        return "1. Black Forest Cake: ₹500\n2. Pineapple Cake: ₹400\n3. Veg Patties: ₹25\n4. Paneer Patties: ₹40\n5. Cold Coffee: ₹80"
+
+# Live menu ko variable me store karna
+LIVE_MENU = get_live_menu()
+
+
 # ========================================================
 # 1. GROQ AI INTEGRATION & SETUP
 # ========================================================
 API_KEY = st.secrets["GROQ_API_KEY"]
 client = Groq(api_key=API_KEY)
 
+
 # ========================================================
-# 2. AI TRAINING PART (System Prompt)
+# 2. AI TRAINING PART (System Prompt with LIVE MENU)
 # ========================================================
-business_rules = """
+# Yaha dhyan dijiye: Maine hardcoded menu hata kar {LIVE_MENU} laga diya hai
+business_rules = f"""
 Aap 'Sharma Bakery' ke official AI customer support agent aur order manager ho.
 Aapka kaam customers ki help karna aur professionally unka order book karna hai.
 
@@ -58,12 +85,8 @@ Business Details:
 - Location: Sanquelim, Goa
 - Owner WhatsApp Number: 919765070870 
 
-Menu & Prices:
-1. Black Forest Cake: ₹500
-2. Pineapple Cake: ₹400
-3. Veg Patties: ₹25
-4. Paneer Patties: ₹40
-5. Cold Coffee: ₹80
+Menu & Prices (Aapko sirf yahi items bechne hain):
+{LIVE_MENU}
 
 DELIVERY CHARGES RULES (Strictly Follow):
 1. Free Delivery: Agar items ka total ₹500 ya usse zyada hai.
@@ -116,13 +139,12 @@ if user_input:
     if dist is not None:
          hidden_context = f"\n\n[SYSTEM NOTE: Customer ka bakery se distance {dist} km calculate hua hai. Bill me isi distance ke hisaab se delivery charge lagao.]"
     
-    # 4. API call ke liye temporary messages list banana (taaki hidden info bas is call me jaye, UI me na dikhe)
+    # 4. API call ke liye temporary messages list banana
     api_messages = st.session_state.messages.copy()
     if hidden_context:
-        # Aakhiri user message me piche se system note jod dena
         api_messages[-1] = {"role": "user", "content": user_input + hidden_context}
 
-    # 5. Groq AI se response lena (Llama 3 70B model use kar rahe hain)
+    # 5. Groq AI se response lena
     try:
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
