@@ -41,25 +41,25 @@ def get_distance(customer_address):
 
 
 # ========================================================
-# FUNCTION: GOOGLE SHEET SE LIVE MENU LAANA (1 Min Timer)
+# FUNCTION: GOOGLE SHEET SE LIVE MENU LAANA
 # ========================================================
-@st.cache_data(ttl=30)  # Har 30 sec me sheet ko check karega
+@st.cache_data(ttl=60)
 def get_live_menu():
     try:
-        # Aapka exact Google Sheet CSV link
+        # Aapka direct export link
         sheet_url = "https://docs.google.com/spreadsheets/d/1KIKX4Jm79Y2KwF75HG80uQflNpfOnU1b5hz4MgDRrz8/export?format=csv"
+        
+        # Data read kar rahe hain
         df = pd.read_csv(sheet_url)
         
         menu_text = ""
         for index, row in df.iterrows():
-            # Check kar rahe hain ki Item Name aur Price columns sheet me hain ya nahi
             menu_text += f"{index + 1}. {row['Item Name']}: ₹{row['Price']}\n"
         return menu_text
+        
     except Exception as e:
-        # Agar error aaye toh app crash na ho
-        return f"[Error in Sheet: Check column names 'Item Name' and 'Price'.]\nBackup Menu:\n1. Black Forest Cake: ₹500"
-
-LIVE_MENU = get_live_menu()
+        # YAHAN ASLI GAME HAI: Ab ye exact error ko screen par print karega!
+        return f"🚨 ASLI ERROR: {str(e)}\n\n[Check karo upar kya error aaya hai]"
 
 
 # ========================================================
