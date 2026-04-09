@@ -47,7 +47,7 @@ def get_distance(customer_address):
 def get_live_menu():
     try:
         # Aapka exact Google Sheet CSV link
-        sheet_url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRaHxTZYbFjTGCSCE5kNLyTuUc4vUkY3V43tHSFxG2y3cbwyn9r3vRLWL42Bw6MricPgK7eoXae7rux/pub?gid=0&single=true&output=csv"
+        sheet_url = "https://docs.google.com/spreadsheets/d/1KIKX4Jm79Y2KwF75HG80uQflNpfOnU1b5hz4MgDRrz8/export?format=csv"
         df = pd.read_csv(sheet_url)
         
         menu_text = ""
