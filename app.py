@@ -68,7 +68,7 @@ General Rules:
 """
 
 # Baki ka aapka Streamlit code
-model = genai.GenerativeModel('gemini-2.5-flash', system_instruction=business_rules)
+model = genai.GenerativeModel('gemini-2.5-flash-lite', system_instruction=business_rules)
 
 
 # ========================================================
