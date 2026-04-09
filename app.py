@@ -1,10 +1,11 @@
 import streamlit as st
-import google.generativeai as genai
+import os
+from groq import Groq
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
 
 # ========================================================
-# MAGIC TRICK (NUCLEAR OPTION): HIDE ALL LOGOS & BADGES
+# MAGIC TRICK: HIDE ALL LOGOS & BADGES
 # ========================================================
 st.set_page_config(page_title="Sharma Bakery AI", page_icon="🍞")
 
@@ -13,8 +14,7 @@ hide_st_style = """
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
             header {visibility: hidden;}
-            /* Deploy aur Toolbar buttons hide karne ke liye */[data-testid="stToolbar"] {visibility: hidden !important;}
-            /* Hosted with Streamlit badge (niche right corner) hide karne ke liye */
+            [data-testid="stToolbar"] {visibility: hidden !important;}
             iframe[title="streamlitAppViewerBadge"] {display: none !important;}
             iframe[src*="badge"] {display: none !important;}
             </style>
@@ -23,16 +23,12 @@ st.markdown(hide_st_style, unsafe_allow_html=True)
 
 
 # ========================================================
-# DISTANCE CALCULATOR FUNCTION (Python Backend)
+# DISTANCE CALCULATOR FUNCTION
 # ========================================================
 def get_distance(customer_address):
     try:
-        # Nominatim free geocoding map service hai
         geolocator = Nominatim(user_agent="sharma_bakery_app")
-        # Bakery Location (Sanquelim, Goa ke coordinates)
-        bakery_loc = (15.5606, 73.9431) 
-        
-        # User ke text me se address dhoondna Goa ke andar
+        bakery_loc = (15.5606, 73.9431) # Sanquelim, Goa
         location = geolocator.geocode(customer_address + ", Sanquelim, Goa", timeout=5)
         if location:
             customer_loc = (location.latitude, location.longitude)
@@ -43,16 +39,14 @@ def get_distance(customer_address):
     except:
         return None
 
+# ========================================================
+# 1. GROQ AI INTEGRATION & SETUP
+# ========================================================
+API_KEY = st.secrets["GROQ_API_KEY"]
+client = Groq(api_key=API_KEY)
 
 # ========================================================
-# 1. AI INTEGRATION PART (API ko app se jodna)
-# ========================================================
-API_KEY = st.secrets["GEMINI_API_KEY"]
-genai.configure(api_key=API_KEY)
-
-
-# ========================================================
-# 2. AI TRAINING PART (Upgraded Rules with Delivery Logic)
+# 2. AI TRAINING PART (System Prompt)
 # ========================================================
 business_rules = """
 Aap 'Sharma Bakery' ke official AI customer support agent aur order manager ho.
@@ -76,60 +70,75 @@ DELIVERY CHARGES RULES (Strictly Follow):
 2. Paid Delivery (Agar items ka total ₹500 se kam hai):
    - Agar distance 1km ya usse kam hai: ₹20 extra charge.
    - Agar distance 1km se zyada hai: ₹30 extra charge.
-   (Note: System aapko backend se distance calculate karke batayega. Agar backend fail ho jaye ya distance na mile, toh default ₹30 delivery charge lagana.)
+   (Note: System aapko backend se distance calculate karke batayega. Agar distance na mile, toh default ₹30 charge lagana.)
 
 Order Processing Rules:
-1. Acknowledge with Price: Item order karne par acknowledge karein aur Price batayein.
-2. Mandatory Details: NAAM, ADDRESS, aur 10-digit PHONE NUMBER.
-3. Order Summary & Total Amount: Confirmation se pehle Bill dikhayein. Bill me "Subtotal" (items ka price) aur "Delivery Charge" alag-alag dikhayein, aur fir "Total Amount" batayein.
-4. OTP Verification & WhatsApp Link: 
-   Jab order confirm ho jaye toh OTP generate karein aur ye WhatsApp link dein:[👉 Click Here to Send Order to Bakery](https://wa.me/919765070870?text=NEW%20ORDER%20RECEIVED!%0A%0A*Customer%20Name:*%20[Customer_Ka_Naam]%0A*Phone:*%20[Customer_Ka_Number]%0A*Address:*%20[Customer_Ka_Address]%0A%0A*Order%20Details:*%0A[Item_1]%20-%20Rs.[Price]%0A[Item_2]%20-%20Rs.[Price]%0A%0A*Subtotal:*%20Rs.[Subtotal]%0A*Delivery%20Charge:*%20Rs.[Delivery_Fee]%0A*Total%20Amount:*%20Rs.[Total_Amount]%0A*Delivery%20OTP:*%20[Aapne_Jo_OTP_Diya])
+1. NAAM, ADDRESS, aur PHONE NUMBER zaroor lein.
+2. Bill me "Subtotal" aur "Delivery Charge" alag dikhayein.
+3. Order confirm hone par ye exact WhatsApp link dein:
+[👉 Click Here to Send Order to Bakery](https://wa.me/919765070870?text=NEW%20ORDER%20RECEIVED!%0A%0A*Customer%20Name:*%20[Customer_Ka_Naam]%0A*Phone:*%20[Customer_Ka_Number]%0A*Address:*%20[Customer_Ka_Address]%0A%0A*Order%20Details:*%0A[Item_1]%20-%20Rs.[Price]%0A[Item_2]%20-%20Rs.[Price]%0A%0A*Subtotal:*%20Rs.[Subtotal]%0A*Delivery%20Charge:*%20Rs.[Delivery_Fee]%0A*Total%20Amount:*%20Rs.[Total_Amount])
 
 General Rules:
 - Hamesha Hinglish me aur politely baat karein.
 """
 
-model = genai.GenerativeModel('gemini-2.5-flash-lite', system_instruction=business_rules)
-
-
 # ========================================================
-# 3. APPLICATION KA USER INTERFACE
+# 3. APPLICATION UI & CHAT LOGIC
 # ========================================================
 st.title("🍞 Sharma Bakery AI Assistant")
 st.write("Swagat hai! Humari bakery ya menu ke baare me kuch bhi puchiye.")
 
-if "chat_session" not in st.session_state:
-    st.session_state.chat_session = model.start_chat(history=[])
+# Session state me messages list setup karna
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {"role": "system", "content": business_rules}
+    ]
 
-for message in st.session_state.chat_session.history:
-    # Hum hidden system note ko screen par nahi dikhana chahte, isliye usko filter kar lenge
-    display_text = message.parts[0].text
-    if "[SYSTEM NOTE:" not in display_text:
-        role = "user" if message.role == "user" else "assistant"
-        with st.chat_message(role):
-            st.markdown(display_text)
+# Purane messages screen par dikhana (System prompt ko chhod kar)
+for msg in st.session_state.messages:
+    if msg["role"] != "system":
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
 
 user_input = st.chat_input("Apna sawaal yaha type karein...")
 
 if user_input:
-    # Customer ka message screen pe dikhana
+    # 1. User message ko UI me dikhana
     with st.chat_message("user"):
         st.markdown(user_input)
     
-    # ---------------------------------------------------------
-    # INTELLIGENT BACKEND LOGIC (Distance Calculation)
-    # ---------------------------------------------------------
-    hidden_context = ""
+    # 2. User message ko history me save karna
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    
+    # 3. Distance calculate karna aur hidden context banana
     dist = get_distance(user_input)
-    
+    hidden_context = ""
     if dist is not None:
-        # Agar python ko distance mil gaya, toh hum AI ko chupke se ek 'System Note' bhejenge
-        hidden_context = f"\n\n[SYSTEM NOTE: Customer ka bakery se distance {dist} km calculate hua hai. Bill me isi distance ke hisaab se delivery charge lagao aur fir batao.]"
+         hidden_context = f"\n\n[SYSTEM NOTE: Customer ka bakery se distance {dist} km calculate hua hai. Bill me isi distance ke hisaab se delivery charge lagao.]"
     
-    # AI se answer mangwana (User message + Hidden Context)
-    response = st.session_state.chat_session.send_message(user_input + hidden_context)
-    
-    # AI ka answer screen pe dikhana (Hidden context hata kar)
-    clean_response = response.text.replace(hidden_context, "")
-    with st.chat_message("assistant"):
-        st.markdown(clean_response)
+    # 4. API call ke liye temporary messages list banana (taaki hidden info bas is call me jaye, UI me na dikhe)
+    api_messages = st.session_state.messages.copy()
+    if hidden_context:
+        # Aakhiri user message me piche se system note jod dena
+        api_messages[-1] = {"role": "user", "content": user_input + hidden_context}
+
+    # 5. Groq AI se response lena (Llama 3 70B model use kar rahe hain)
+    try:
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=api_messages,
+            temperature=0.3,
+            max_tokens=1024,
+        )
+        
+        response_text = completion.choices[0].message.content
+        
+        # 6. Response screen pe dikhana
+        with st.chat_message("assistant"):
+            st.markdown(response_text)
+            
+        # 7. Response history me save karna
+        st.session_state.messages.append({"role": "assistant", "content": response_text})
+        
+    except Exception as e:
+        st.error(f"Error aagaya: {e}")
