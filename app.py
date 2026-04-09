@@ -46,10 +46,7 @@ def get_distance(customer_address):
 @st.cache_data(ttl=60)
 def get_live_menu():
     try:
-        # Aapka direct export link
         sheet_url = "https://docs.google.com/spreadsheets/d/1KIKX4Jm79Y2KwF75HG80uQflNpfOnU1b5hz4MgDRrz8/export?format=csv"
-        
-        # Data read kar rahe hain
         df = pd.read_csv(sheet_url)
         
         menu_text = ""
@@ -58,9 +55,11 @@ def get_live_menu():
         return menu_text
         
     except Exception as e:
-        # YAHAN ASLI GAME HAI: Ab ye exact error ko screen par print karega!
         return f"🚨 ASLI ERROR: {str(e)}\n\n[Check karo upar kya error aaya hai]"
 
+# ====== YEH LINE MISSING THI, ISKO ZAROOR RAKHNA HAI ======
+LIVE_MENU = get_live_menu()
+# ==========================================================
 
 # ========================================================
 # 1. GROQ AI INTEGRATION & SETUP
