@@ -7,7 +7,11 @@ from geopy.distance import geodesic
 # ========================================================
 # MAGIC TRICK: HIDE ALL LOGOS & BADGES
 # ========================================================
-st.set_page_config(page_title="Sharma Bakery AI", page_icon="🍞")
+st.set_page_config(
+    page_title="Sharma Bakery AI", 
+    page_icon="🍞", 
+    initial_sidebar_state="expanded"  # Yeh line menu ko hamesha khula rakhegi
+)
 
 hide_st_style = """
             <style>
@@ -49,15 +53,19 @@ def get_live_menu():
         sheet_url = "https://docs.google.com/spreadsheets/d/1KIKX4Jm79Y2KwF75HG80uQflNpfOnU1b5hz4MgDRrz8/export?format=csv"
         df = pd.read_csv(sheet_url)
         
+        # YEH MAGIC LINE HAI: Ye column headers se saari extra spaces hata degi
+        df.columns = df.columns.str.strip()
+        
         menu_text = ""
         for index, row in df.iterrows():
-            menu_text += f"{index + 1}. {row['Item Name']}: ₹{row['Price']}\n"
+            # Check karte hain ki us row me koi khali data toh nahi hai
+            if pd.notna(row.get('Item Name')) and pd.notna(row.get('Price')):
+                menu_text += f"{index + 1}. {row['Item Name']}: ₹{row['Price']}\n"
         return menu_text
         
     except Exception as e:
         return f"🚨 ASLI ERROR: {str(e)}\n\n[Check karo upar kya error aaya hai]"
 
-# ====== YEH LINE MISSING THI, ISKO ZAROOR RAKHNA HAI ======
 LIVE_MENU = get_live_menu()
 # ==========================================================
 
