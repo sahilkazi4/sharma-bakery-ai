@@ -59,12 +59,11 @@ def get_live_menu():
 LIVE_MENU = get_live_menu()
 
 # ========================================================
-# AI SETUP & RULES
+# AI SETUP & STRICT RULES
 # ========================================================
 API_KEY = st.secrets["GROQ_API_KEY"]
 client = Groq(api_key=API_KEY)
 
-# Yaha WhatsApp link me 'Rs.' specify kiya gaya hai taaki '%u20b9' bug na aaye.
 business_rules = f"""
 Aap 'Sharma Bakery' ke official AI order manager ho.
 
@@ -76,23 +75,26 @@ Menu & Prices:
 {LIVE_MENU}
 
 DELIVERY RULES:
-1. Free Delivery: If items total >= ₹500.
-2. Paid Delivery: Within 1km = ₹20, Above 1km = ₹30. (System will provide distance).
+1. Free Delivery: Total >= ₹500.
+2. Paid Delivery: Within 1km = ₹20, Above 1km = ₹30.
 
-ORDER PROCESSING:
-1. Collect NAME, ADDRESS, and PHONE NUMBER.
-2. Order confirm hone par aapko 2 cheezein karni hain:
+🚨 STRICT ORDER PROCESSING WORKFLOW (ISKO ZAROOR FOLLOW KAREIN) 🚨
+STEP 1: Customer se order lein aur price batayein.
+STEP 2: CHECK karein ki kya customer ne apna ASLI NAAM, PHONE NUMBER, aur PURA ADDRESS (teeno) type karke diya hai?
+STEP 3: Agar ek bhi missing hai, toh clearly usse missing details maangein. (WARNING: Kabhi bhi apni taraf se '[Name]' ya '[Address]' use karke dummy link generate mat karna).
+STEP 4: JAB CUSTOMER TEENO DETAILS (Naam, Phone, Address) de de, SIRF TAB HI final confirm karke neeche wala WhatsApp Link aur Hidden Log generate karein. Usse pehle bilkul nahi.
 
-PEHLA KAAM: Customer ko sirf ek Shop Owner ka WhatsApp link dena hai.
-🚨 STRICT RULE: WhatsApp link me ₹ symbol BILKUL USE NAHI KARNA HAI. Sirf 'Rs.' use karein warna link toot jayega!
-Link Format:[👉 Click Here to Send Order to Shop Owner](https://wa.me/919765070870?text=NEW%20ORDER%20RECEIVED!%0A%0A*Customer%20Name:*%20[Name]%0A*Phone:*%20[Phone]%0A*Address:*%20[Address]%0A%0A*Order%20Details:*%0A[Items]%0A%0A*Subtotal:*%20Rs.[Subtotal]%0A*Delivery:*%20Rs.[Delivery]%0A*Total:*%20Rs.[Total])
+FORMAT (To be used ONLY in Step 4):
 
-DOOSRA KAAM: App Admin ke Database ke liye ek Hidden Log generate karna hai. Apne response ke sabse aakhir me bilkul is format me likhein:
+[👉 Click Here to Send Order to Shop Owner](https://wa.me/919765070870?text=NEW%20ORDER%20RECEIVED!%0A%0A*Customer%20Name:*%20[Asli_Naam_Yaha]%0A*Phone:*%20[Asli_Phone_Yaha]%0A*Address:*%20[Asli_Address_Yaha]%0A%0A*Order%20Details:*%0A[Items]%0A%0A*Subtotal:*%20Rs.[Subtotal]%0A*Delivery:*%20Rs.[Delivery]%0A*Total:*%20Rs.[Total])
+
 ===ORDER_LOG===
-Name: [Name]
-Phone: [Phone]
-Address: [Address]
-Items: [Item list]
+Name:[Asli_Naam_Yaha]
+Phone: [Asli_Phone_Yaha]
+Address:[Asli_Address_Yaha]
+Items: [Item list with price]
+Subtotal: Rs.[Subtotal]
+Delivery: Rs. [Delivery]
 Total Amount: Rs. [Total]
 ===END_LOG===
 """
@@ -105,7 +107,7 @@ with st.sidebar:
     st.text(LIVE_MENU)
     if st.button("🔄 Refresh Menu / Clear Chat"):
         st.cache_data.clear()
-        st.session_state.messages = [{"role": "system", "content": business_rules}]
+        st.session_state.messages =[{"role": "system", "content": business_rules}]
         st.rerun()
 
 st.title("🍞 Sharma Bakery AI Assistant")
@@ -142,34 +144,37 @@ if user_input:
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=api_messages,
-            temperature=0.3,
+            temperature=0.3, # Temperature 0.3 rakhi hai taki AI rules strictly follow kare
             max_tokens=1024,
         )
         
         response_text = completion.choices[0].message.content
-        
-        # -------------------------------------------------------------
-        # THE MAGIC: Extracting Hidden Log & Sending to Google Sheets
-        # -------------------------------------------------------------
         display_text = response_text
         
+        # -------------------------------------------------------------
+        # GOOGLE SHEETS LOGIC WITH ERROR TOAST
+        # -------------------------------------------------------------
         if "===ORDER_LOG===" in response_text:
-            # AI ke response me se hidden log dhundo
             match = re.search(r"===ORDER_LOG===(.*?)===END_LOG===", response_text, re.DOTALL)
             if match:
                 order_info = match.group(1).strip()
-                
-                # Google Sheet par data bhejna
                 webhook_url = st.secrets.get("WEBHOOK_URL", "")
+                
                 if webhook_url:
                     try:
-                        requests.post(webhook_url, json={"order_details": order_info})
+                        # Request bhej rahe hain Google Sheets ko
+                        res = requests.post(webhook_url, json={"order_details": order_info})
+                        if res.status_code == 200:
+                            st.toast("✅ Order saved to Admin Database!")
+                        else:
+                            st.toast(f"⚠️ Google Sheet Update Failed! (Status: {res.status_code})")
                     except Exception as e:
-                        pass # Agar error aaye toh customer ko na dikhe
+                        st.toast(f"⚠️ Webhook Error: {e}")
+                else:
+                    st.toast("⚠️ WEBHOOK_URL secrets me nahi mila!")
                         
-            # Customer ko dikhne wale message se log ko mita dena
+            # Customer ko clean message dikhana
             display_text = re.sub(r"===ORDER_LOG===.*?===END_LOG===", "", response_text, flags=re.DOTALL).strip()
-        # -------------------------------------------------------------
         
         with st.chat_message("assistant"):
             st.markdown(display_text)
