@@ -3,29 +3,19 @@ import pandas as pd
 from groq import Groq
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
+import requests
+import re
 
 # ========================================================
 # MAGIC TRICK: HIDE ALL LOGOS & BADGES
 # ========================================================
-st.set_page_config(
-    page_title="Sharma Bakery AI", 
-    page_icon="🍞", 
-    initial_sidebar_state="expanded" 
-)
+st.set_page_config(page_title="Sharma Bakery AI", page_icon="🍞", initial_sidebar_state="expanded")
 
 hide_st_style = """
-            <style>
-            /* Sirf right side ke faltu buttons (Deploy, 3-dots) hide honge */
-            [data-testid="stToolbar"] {visibility: hidden !important;}
-            
-            /* Niche ka Streamlit footer hide hoga */
+            <style>[data-testid="stToolbar"] {visibility: hidden !important;}
             footer {visibility: hidden !important;}
-            
-            /* Hosted badge hide hoga */
             iframe[title="streamlitAppViewerBadge"] {display: none !important;}
             iframe[src*="badge"] {display: none !important;}
-
-            /* 🎯 MAGIC LINE: Menu open karne wala (>) button HAMESHA dikhega! */
             [data-testid="collapsedControl"] {display: flex !important; visibility: visible !important;}
             </style>
             """
@@ -49,76 +39,67 @@ def get_distance(customer_address):
     except:
         return None
 
-
 # ========================================================
-# FUNCTION: GOOGLE SHEET SE LIVE MENU LAANA
+# LIVE MENU FETCH
 # ========================================================
 @st.cache_data(ttl=60)
 def get_live_menu():
     try:
         sheet_url = "https://docs.google.com/spreadsheets/d/1KIKX4Jm79Y2KwF75HG80uQflNpfOnU1b5hz4MgDRrz8/export?format=csv"
         df = pd.read_csv(sheet_url)
-        
-        # YEH MAGIC LINE HAI: Ye column headers se saari extra spaces hata degi
         df.columns = df.columns.str.strip()
-        
         menu_text = ""
         for index, row in df.iterrows():
-            # Check karte hain ki us row me koi khali data toh nahi hai
             if pd.notna(row.get('Item Name')) and pd.notna(row.get('Price')):
                 menu_text += f"{index + 1}. {row['Item Name']}: ₹{row['Price']}\n"
         return menu_text
-        
     except Exception as e:
-        return f"🚨 ASLI ERROR: {str(e)}\n\n[Check karo upar kya error aaya hai]"
+        return f"🚨 Error: {str(e)}"
 
 LIVE_MENU = get_live_menu()
-# ==========================================================
 
 # ========================================================
-# 1. GROQ AI INTEGRATION & SETUP
+# AI SETUP & RULES
 # ========================================================
 API_KEY = st.secrets["GROQ_API_KEY"]
 client = Groq(api_key=API_KEY)
 
-
-# ========================================================
-# 2. AI TRAINING PART (System Prompt with LIVE MENU)
-# ========================================================
+# Yaha WhatsApp link me 'Rs.' specify kiya gaya hai taaki '%u20b9' bug na aaye.
 business_rules = f"""
-Aap 'Sharma Bakery' ke official AI customer support agent aur order manager ho.
-Aapka kaam customers ki help karna aur professionally unka order book karna hai.
+Aap 'Sharma Bakery' ke official AI order manager ho.
 
 Business Details:
 - Shop Name: Sharma Bakery
-- Timings: Subah 9:00 AM se Raat 10:00 PM (Mon-Sun)
 - Location: Sanquelim, Goa
-- Owner WhatsApp Number: 919765070870 
 
-Menu & Prices (Sirf yahi items bechne hain):
+Menu & Prices:
 {LIVE_MENU}
 
-DELIVERY CHARGES RULES (Strictly Follow):
-1. Free Delivery: Agar items ka total ₹500 ya usse zyada hai.
-2. Paid Delivery (Agar items ka total ₹500 se kam hai):
-   - Agar distance 1km ya usse kam hai: ₹20 extra charge.
-   - Agar distance 1km se zyada hai: ₹30 extra charge.
-   (Note: System aapko backend se distance calculate karke batayega. Agar distance na mile, toh default ₹30 charge lagana.)
+DELIVERY RULES:
+1. Free Delivery: If items total >= ₹500.
+2. Paid Delivery: Within 1km = ₹20, Above 1km = ₹30. (System will provide distance).
 
-Order Processing Rules:
-1. NAAM, ADDRESS, aur PHONE NUMBER zaroor lein.
-2. Bill me "Subtotal" aur "Delivery Charge" alag dikhayein.
-3. Order confirm hone par ye exact WhatsApp link dein:
-[👉 Click Here to Send Order to Bakery](https://wa.me/919765070870?text=NEW%20ORDER%20RECEIVED!%0A%0A*Customer%20Name:*%20[Customer_Ka_Naam]%0A*Phone:*%20[Customer_Ka_Number]%0A*Address:*%20[Customer_Ka_Address]%0A%0A*Order%20Details:*%0A[Item_1]%20-%20Rs.[Price]%0A[Item_2]%20-%20Rs.[Price]%0A%0A*Subtotal:*%20Rs.[Subtotal]%0A*Delivery%20Charge:*%20Rs.[Delivery_Fee]%0A*Total%20Amount:*%20Rs.[Total_Amount])
+ORDER PROCESSING:
+1. Collect NAME, ADDRESS, and PHONE NUMBER.
+2. Order confirm hone par aapko 2 cheezein karni hain:
 
-General Rules:
-- Hamesha Hinglish me aur politely baat karein.
+PEHLA KAAM: Customer ko sirf ek Shop Owner ka WhatsApp link dena hai.
+🚨 STRICT RULE: WhatsApp link me ₹ symbol BILKUL USE NAHI KARNA HAI. Sirf 'Rs.' use karein warna link toot jayega!
+Link Format:[👉 Click Here to Send Order to Shop Owner](https://wa.me/919765070870?text=NEW%20ORDER%20RECEIVED!%0A%0A*Customer%20Name:*%20[Name]%0A*Phone:*%20[Phone]%0A*Address:*%20[Address]%0A%0A*Order%20Details:*%0A[Items]%0A%0A*Subtotal:*%20Rs.[Subtotal]%0A*Delivery:*%20Rs.[Delivery]%0A*Total:*%20Rs.[Total])
+
+DOOSRA KAAM: App Admin ke Database ke liye ek Hidden Log generate karna hai. Apne response ke sabse aakhir me bilkul is format me likhein:
+===ORDER_LOG===
+Name: [Name]
+Phone: [Phone]
+Address: [Address]
+Items: [Item list]
+Total Amount: Rs. [Total]
+===END_LOG===
 """
 
 # ========================================================
-# 3. APPLICATION UI & CHAT LOGIC
+# UI & CHAT LOGIC
 # ========================================================
-# Sidebar me Live Menu dikhana (Customer & Owner dono ke liye helpful)
 with st.sidebar:
     st.markdown("### 📋 Today's Live Menu")
     st.text(LIVE_MENU)
@@ -130,18 +111,13 @@ with st.sidebar:
 st.title("🍞 Sharma Bakery AI Assistant")
 st.write("Swagat hai! Humari bakery ya menu ke baare me kuch bhi puchiye.")
 
-# Session state handle karna (Yahi sabse zaroori fix tha)
 if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {"role": "system", "content": business_rules}
-    ]
+    st.session_state.messages =[{"role": "system", "content": business_rules}]
 else:
-    # Agar chat chal rahi hai aur piche se menu update ho, toh AI ko naya menu mil jayega
     st.session_state.messages[0]["content"] = business_rules
 
-# Purane messages screen par dikhana
 for msg in st.session_state.messages:
-    if msg["role"] != "system":
+    if msg["role"] not in["system", "hidden_log"]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
@@ -156,9 +132,9 @@ if user_input:
     dist = get_distance(user_input)
     hidden_context = ""
     if dist is not None:
-         hidden_context = f"\n\n[SYSTEM NOTE: Customer ka bakery se distance {dist} km calculate hua hai. Bill me isi distance ke hisaab se delivery charge lagao.]"
+         hidden_context = f"\n\n[SYSTEM NOTE: Distance is {dist} km. Add delivery charge.]"
     
-    api_messages = st.session_state.messages.copy()
+    api_messages =[m for m in st.session_state.messages if m["role"] != "hidden_log"]
     if hidden_context:
         api_messages[-1] = {"role": "user", "content": user_input + hidden_context}
 
@@ -172,10 +148,33 @@ if user_input:
         
         response_text = completion.choices[0].message.content
         
+        # -------------------------------------------------------------
+        # THE MAGIC: Extracting Hidden Log & Sending to Google Sheets
+        # -------------------------------------------------------------
+        display_text = response_text
+        
+        if "===ORDER_LOG===" in response_text:
+            # AI ke response me se hidden log dhundo
+            match = re.search(r"===ORDER_LOG===(.*?)===END_LOG===", response_text, re.DOTALL)
+            if match:
+                order_info = match.group(1).strip()
+                
+                # Google Sheet par data bhejna
+                webhook_url = st.secrets.get("WEBHOOK_URL", "")
+                if webhook_url:
+                    try:
+                        requests.post(webhook_url, json={"order_details": order_info})
+                    except Exception as e:
+                        pass # Agar error aaye toh customer ko na dikhe
+                        
+            # Customer ko dikhne wale message se log ko mita dena
+            display_text = re.sub(r"===ORDER_LOG===.*?===END_LOG===", "", response_text, flags=re.DOTALL).strip()
+        # -------------------------------------------------------------
+        
         with st.chat_message("assistant"):
-            st.markdown(response_text)
+            st.markdown(display_text)
             
-        st.session_state.messages.append({"role": "assistant", "content": response_text})
+        st.session_state.messages.append({"role": "assistant", "content": display_text})
         
     except Exception as e:
         st.error(f"Error aagaya: {e}")
